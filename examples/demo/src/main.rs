@@ -3,6 +3,7 @@ use crossterm::{
     cursor::{self, position},
     event::{poll, read, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
+    style::Color,
     terminal::{self, disable_raw_mode, enable_raw_mode, Clear, ClearType},
 };
 use std::{
@@ -22,7 +23,13 @@ fn print_events(stdout: &mut Stdout) -> io::Result<()> {
         click_pos: None,
     };
 
-    ui.root.push(Element::Widget(Widget::new("I'm a widget!")));
+    ui.root
+        .push(Element::Widget(Widget::new("I'm a widget!").padding(
+            |pad| {
+                pad.color(Color::Cyan)
+                    .set(bad_tui::ui::AreaShort::Uniform(2))
+            },
+        )));
 
     ui.root
         .push(Element::Widget(Widget::new("I'm a second widget!")));

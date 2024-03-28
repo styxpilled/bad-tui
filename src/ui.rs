@@ -203,11 +203,62 @@ impl<'a> Block<'a> {
     }
 }
 
+pub struct Area {
+    pub top: u16,
+    pub right: u16,
+    pub bottom: u16,
+    pub left: u16,
+    pub symbol: char,
+    pub color: Color,
+    pub background: Color,
+}
+
+pub enum AreaShort {
+    Uniform(u16),
+    HorVer(u16, u16),
+    All(u16, u16, u16, u16),
+}
+
+impl Area {
+    pub fn set(mut self, short: AreaShort) -> Self {
+        (self.top, self.right, self.bottom, self.left) = match short {
+            AreaShort::Uniform(uni) => (uni, uni, uni, uni),
+            AreaShort::HorVer(hor, ver) => (hor, ver, hor, ver),
+            AreaShort::All(t, r, b, l) => (t, r, b, l),
+        };
+        self
+    }
+
+    pub fn symbol(mut self, symbol: char) -> Self {
+        self.symbol = symbol;
+        self
+    }
+
+    pub fn color(mut self, color: Color) -> Self {
+        self.color = color;
+        self
+    }
+}
+
+impl Default for Area {
+    fn default() -> Self {
+        Self {
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            symbol: '@',
+            color: Color::White,
+            background: Color::Black,
+        }
+    }
+}
+
 pub struct Widget {
     pub text: String,
     // pub color: Color,
     // pub bg: Option<Color>,
-    pub padding: (u16, u16),
+    pub padding: Area,
     pub margin: (u16, u16),
     // Including margin & padding!
     pub size: (u16, u16),
@@ -223,10 +274,18 @@ impl Widget {
             // bg: None,
             pos: (0, 0),
             clicked: false,
-            padding: (1, 1),
+            padding: Area::default().symbol('$'),
             size: (3, 3),
             margin: (1, 1),
         }
+    }
+
+    pub fn padding<F>(mut self, f: F) -> Self
+    where
+        F: FnOnce(Area) -> Area,
+    {
+        self.padding = f(self.padding);
+        self
     }
 
     pub fn render(&self, stdout: &mut Stdout) {
@@ -243,7 +302,11 @@ impl Widget {
                 stdout,
                 cursor::MoveTo(self.pos.0, row),
                 Print("@".repeat(
-                    (self.margin.0 + self.text.len() as u16 + 2 + self.padding.0) as usize
+                    (self.margin.0
+                        + self.margin.0
+                        + self.text.len() as u16
+                        + self.padding.left
+                        + self.padding.right) as usize
                 ))
             )
             .unwrap();
@@ -255,8 +318,9 @@ impl Widget {
             queue!(
                 stdout,
                 cursor::MoveTo(self.pos.0 + self.margin.0, row),
+                SetForegroundColor(self.padding.color),
                 Print("$".repeat(
-                    (self.padding.0 + self.text.len() as u16 + 2 - self.margin.0) as usize
+                    (self.padding.left + self.padding.right + self.text.len() as u16) as usize
                 ))
             )
             .unwrap();
@@ -268,8 +332,8 @@ impl Widget {
             FG_RESET,
             BG_RESET,
             cursor::MoveTo(
-                self.pos.0 + self.margin.0 + self.padding.0,
-                self.pos.1 + self.margin.1 + self.padding.1
+                self.pos.0 + self.margin.0 + self.padding.left,
+                self.pos.1 + self.margin.1 + self.padding.top
             ),
             // Print(" ".repeat(self.margin.0.into())),
             SetBackgroundColor(Color::White),
@@ -292,8 +356,8 @@ impl Widget {
 
     pub fn calc_self(&mut self) -> (u16, u16) {
         // only supports 1-height text for now
-        self.size.0 = self.margin.0 * 2 + self.padding.0 * 2 + self.text.len() as u16;
-        self.size.1 = self.margin.1 * 2 + self.padding.1 * 2 + 1;
+        self.size.0 = self.margin.0 * 2 + self.padding.left * 2 + self.text.len() as u16;
+        self.size.1 = self.margin.1 * 2 + self.padding.top * 2 + 1;
         self.size
     }
 
