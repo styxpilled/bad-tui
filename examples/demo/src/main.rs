@@ -17,84 +17,99 @@ fn print_events(stdout: &mut Stdout) -> io::Result<()> {
         root: Block::new((0, 0)),
     };
 
-    let mut ctx = Context {
-        max: (70, 30),
-        bg_color: crossterm::style::Color::Red,
-        click_pos: None,
-    };
+    let mut ctx = Context::new();
 
-    ui.root.push(Element::Widget(
-        Widget::new("I'm a widget!")
-            .padding(|pad| {
-                pad.color(Color::Cyan)
-                    .set(bad_tui::ui::AreaShort::Uniform(1))
-            })
-            .margin(|mar| mar.color(Color::Blue).symbol('!')),
-    ));
+    // ui.root.push(Element::Widget(
+    //     Widget::new("I'm a widget!")
+    //         .padding(|pad| {
+    //             pad.color(Color::Cyan)
+    //                 .set(bad_tui::ui::AreaShort::Uniform(1))
+    //         })
+    //         .margin(|mar| mar.color(Color::Blue).symbol('!')),
+    // ));
 
-    ui.root
-        .push(Element::Widget(Widget::new("I'm a second widget!").margin(
-            |mar| {
-                mar.color(Color::Green)
-                    .set(bad_tui::ui::AreaShort::Uniform(2))
-                    .symbol('@')
-            },
-        )));
+    // ui.root
+    //     .push(Element::Widget(Widget::new("I'm a second widget!").margin(
+    //         |mar| {
+    //             mar.color(Color::Green)
+    //                 .set(bad_tui::ui::AreaShort::Uniform(2))
+    //                 .symbol('@')
+    //         },
+    //     )));
 
-    ui.root
-        .push(Element::Widget(Widget::new("I'm a third widget!").margin(
-            |mar| {
-                mar.color(Color::Yellow)
-                    .set(bad_tui::ui::AreaShort::HorVer(3, 4))
-                    .symbol('#')
-            },
-        )));
-    ui.root
-        .push(Element::Widget(Widget::new("I'm a second widget!").margin(
-            |mar| {
-                mar.color(Color::Green)
-                    .set(bad_tui::ui::AreaShort::Uniform(2))
-                    .symbol('@')
-            },
-        )));
-    ui.root.push(Element::Widget(
-        Widget::new("I'm a fourth widget!")
-            .padding(|pad| {
-                pad.color(Color::Cyan)
-                    .set(bad_tui::ui::AreaShort::Uniform(1))
-            })
-            .margin(|mar| mar.color(Color::Blue).symbol('!')),
-    ));
-    ui.root.push(Element::Widget(
-        Widget::new("I'm a widget!")
-            .padding(|pad| {
-                pad.color(Color::Cyan)
-                    .set(bad_tui::ui::AreaShort::Uniform(1))
-            })
-            .margin(|mar| mar.color(Color::Blue).symbol('!')),
-    ));
+    // ui.root
+    //     .push(Element::Widget(Widget::new("I'm a third widget!").margin(
+    //         |mar| {
+    //             mar.color(Color::Yellow)
+    //                 .set(bad_tui::ui::AreaShort::HorVer(3, 4))
+    //                 .symbol('#')
+    //         },
+    //     )));
+    // ui.root
+    //     .push(Element::Widget(Widget::new("I'm a second widget!").margin(
+    //         |mar| {
+    //             mar.color(Color::Green)
+    //                 .set(bad_tui::ui::AreaShort::Uniform(2))
+    //                 .symbol('@')
+    //         },
+    //     )));
+    // ui.root.push(Element::Widget(
+    //     Widget::new("I'm a fourth widget!")
+    //         .padding(|pad| {
+    //             pad.color(Color::Cyan)
+    //                 .set(bad_tui::ui::AreaShort::Uniform(1))
+    //         })
+    //         .margin(|mar| mar.color(Color::Blue).symbol('!')),
+    // ));
+    // ui.root.push(Element::Widget(
+    //     Widget::new("I'm a widget!")
+    //         .padding(|pad| {
+    //             pad.color(Color::Cyan)
+    //                 .set(bad_tui::ui::AreaShort::Uniform(1))
+    //         })
+    //         .margin(|mar| mar.color(Color::Blue).symbol('!')),
+    // ));
+    let mut b = Block::new((0, 0));
+    // b.push(Element::Widget(
+    //     Widget::new("I'm a widget!")
+    //         .padding(|pad| {
+    //             pad.color(Color::Cyan)
+    //                 .set(bad_tui::ui::AreaShort::Uniform(1))
+    //         })
+    //         .margin(|mar| mar.color(Color::Blue).symbol('!')),
+    // ));
+    // b.push(Element::Block(Block::new((0, 0))));
+    ui.root.push(Element::Block(b));
     // let mut b = Block::new((0, 0));
-    // b.push(Element::Widget(Widget::new("I'm a nested widget!")));
+    // b.push(Element::Widget(
+    //     Widget::new("I'm a widget!")
+    //         .padding(|pad| {
+    //             pad.color(Color::Cyan)
+    //                 .set(bad_tui::ui::AreaShort::Uniform(1))
+    //         })
+    //         .margin(|mar| mar.color(Color::Blue).symbol('!')),
+    // ));
     // b.push(Element::Block(Block::new((0, 0))));
     // ui.root.push(Element::Block(b));
 
     // ui.root
     //     .push(Element::Widget(Widget::new("I'm a third widget!")));
 
-    ui.render(&ctx);
+    ui.render(&mut ctx);
 
     loop {
         // Blocking read
         let event = read()?;
         ctx.process(&event);
         ui.process(&ctx);
-        ui.render(&ctx);
+        ui.render(&mut ctx);
         // println!("Event: {:?}\r", event);
 
         // if event == Event::Key(KeyCode::Char('c').into()) {
         //     println!("Cursor position: {:?}\r", position());
         // }
 
+        // TODO: add to ctx.process
         if let Event::Resize(x, y) = event {
             let (_original_size, new_size) = flush_resize_events((x, y));
             ctx.max = new_size;

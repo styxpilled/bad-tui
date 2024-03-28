@@ -3,12 +3,15 @@ use crossterm::{
     event::{Event, MouseButton},
     queue,
     style::{Color, Print, SetBackgroundColor, SetForegroundColor},
+    terminal::size,
 };
 use std::{
     cell::{Ref, RefCell},
     cmp,
     io::{Stdout, Write},
+    ops::{Index, IndexMut},
     rc::Rc,
+    slice::SliceIndex,
 };
 
 const BG_RESET: SetBackgroundColor = SetBackgroundColor(Color::Reset);
@@ -23,14 +26,93 @@ pub struct UI<'a> {
 }
 
 #[derive(Clone, Debug)]
+struct Pixel {
+    char: char,
+    color: Color,
+    changed: bool,
+}
+
+impl Default for Pixel {
+    fn default() -> Self {
+        Self {
+            char: ' ',
+            color: Color::White,
+            changed: true,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Context {
     pub max: (u16, u16),
     pub click_pos: Option<(u16, u16)>,
     // pub offset: u8,
     pub bg_color: Color,
+    virtual_display: VirtualDisplay,
+}
+
+#[derive(Clone, Debug)]
+struct VirtualDisplay(Vec<VirtualDisplayRow>);
+
+#[derive(Clone, Debug)]
+struct VirtualDisplayRow(Vec<Pixel>);
+
+impl Index<u16> for VirtualDisplay {
+    type Output = VirtualDisplayRow;
+
+    fn index(&self, index: u16) -> &Self::Output {
+        &self.0[index as usize]
+    }
+}
+
+impl IndexMut<u16> for VirtualDisplay {
+    fn index_mut(&mut self, index: u16) -> &mut Self::Output {
+        &mut self.0[index as usize]
+    }
+}
+
+impl Index<u16> for VirtualDisplayRow {
+    type Output = Pixel;
+
+    fn index(&self, index: u16) -> &Self::Output {
+        &self.0[index as usize]
+    }
+}
+
+impl IndexMut<u16> for VirtualDisplayRow {
+    fn index_mut(&mut self, index: u16) -> &mut Self::Output {
+        &mut self.0[index as usize]
+    }
 }
 
 impl Context {
+    pub fn new() -> Self {
+        let (width, height) = size().unwrap();
+        Context {
+            bg_color: Color::Red,
+            click_pos: None,
+            max: (width, height),
+            virtual_display: VirtualDisplay(vec![
+                VirtualDisplayRow(vec![
+                    Pixel::default();
+                    width.into()
+                ]);
+                height.into()
+            ]),
+        }
+    }
+
+    pub fn set_size(&mut self, new_size: (u16, u16)) {
+        self.max = new_size;
+        self.virtual_display = VirtualDisplay(vec![
+            VirtualDisplayRow(vec![
+                Pixel::default();
+                new_size.0.into()
+            ]);
+            new_size.1.into()
+        ]);
+    }
+
     pub fn process(&mut self, event: &Event) {
         self.click_pos = match event {
             Event::Mouse(event) => match event.kind {
@@ -48,15 +130,31 @@ impl Context {
 }
 
 impl<'a> UI<'a> {
-    pub fn render(&mut self, ctx: &Context) {
+    pub fn render(&mut self, ctx: &mut Context) {
         self.root.calc_self();
-        self.root.render(self.stdout, ctx.max);
+        self.root.render(self.stdout, ctx);
         queue!(
             self.stdout,
             SetBackgroundColor(Color::Reset),
             SetForegroundColor(Color::Reset)
         )
         .unwrap();
+
+        for (col_pos, column) in ctx.virtual_display.0.iter_mut().enumerate() {
+            for (row_pos, px) in column.0.iter_mut().enumerate() {
+                if !px.changed {
+                    continue;
+                }
+                queue!(
+                    self.stdout,
+                    cursor::MoveTo(col_pos as u16, row_pos as u16),
+                    SetForegroundColor(px.color),
+                    crossterm::style::Print(px.char)
+                )
+                .unwrap();
+                px.changed = false;
+            }
+        }
     }
 
     pub fn process(&mut self, ctx: &Context) {
@@ -87,39 +185,52 @@ pub enum Direction {
 }
 
 impl<'a> Block<'a> {
-    pub fn render(&mut self, stdout: &mut Stdout, max: (u16, u16)) {
+    pub fn render(&mut self, stdout: &mut Stdout, ctx: &mut Context) {
         // let (max_width, max_height) = max;
-        let max_width = self.size.0 + 2;
-        let max_height = self.size.1 + 2;
         // Print the top border
-        queue!(
-            stdout,
-            cursor::MoveTo(self.pos.0, self.pos.1),
-            Print("#".repeat((max_width - self.pos.0).into()))
-        )
-        .unwrap();
-        let mut row = self.pos.0;
-        while row < max_height {
-            // Print the left border
-            queue!(stdout, cursor::MoveTo(self.pos.0, row), Print("#")).unwrap();
-            // Print the right border
-            queue!(stdout, cursor::MoveTo(max_width - 1, row), Print("#")).unwrap();
-            row += 1;
+        // queue!(stdout,);
+        // queue!(
+        //     stdout,
+        //     cursor::MoveTo(self.pos.0, self.pos.1),
+        //     Print("#".repeat((self.size.0).into()))
+        // )
+        // .unwrap();
+        for row in self.pos.0..self.pos.0 + self.size.0 {
+            for col in self.pos.1..self.pos.1 + self.size.1 {
+                ctx.virtual_display[row][col] = Pixel {
+                    char: '#',
+                    color: Color::White,
+                    changed: true,
+                };
+            }
+        }
+
+        for row in self.pos.0 + 1..self.pos.0 + self.size.0 - 1 {
+            for col in self.pos.1 + 1..self.pos.1 + self.size.1 - 1 {
+                ctx.virtual_display[row][col] = Pixel {
+                    char: ' ',
+                    color: Color::White,
+                    changed: true,
+                };
+            }
         }
         // Print the bottom border
-        queue!(
-            stdout,
-            cursor::MoveTo(self.pos.0, max_height),
-            Print("#".repeat((max_width - self.pos.0).into()))
-        )
-        .unwrap();
+        // queue!(
+        //     stdout,
+        //     cursor::MoveTo(self.pos.0, self.pos.1 + self.size.1),
+        //     Print("#".repeat((self.size.0).into()))
+        // )
+        // .unwrap();
 
-        queue!(stdout, cursor::MoveTo(self.pos.0 + 1, self.pos.1 + 1)).unwrap();
-        let max = (max_width - 2, max_height - 3);
+        // queue!(stdout, cursor::MoveTo(self.pos.0 + 1, self.pos.1 + 1)).unwrap();
+        let max = (
+            self.size.0.checked_sub(2).unwrap_or(0),
+            self.size.1.checked_sub(3).unwrap_or(0),
+        );
         for el in self.contents.iter_mut() {
             match el.get_mut() {
                 Element::Block(block) => {
-                    block.render(stdout, max);
+                    block.render(stdout, ctx);
                 }
                 Element::Widget(widget) => {
                     widget.render(stdout);
@@ -129,7 +240,7 @@ impl<'a> Block<'a> {
     }
 
     pub fn calc_self(&mut self) {
-        self.size = (3, 2);
+        self.size = (4, 4);
         for el in self.contents.iter_mut() {
             match el.get_mut() {
                 Element::Block(block) => {
@@ -144,6 +255,7 @@ impl<'a> Block<'a> {
                 }
             }
         }
+        // println!("{:?}", self.size);
     }
 
     pub fn process(&mut self, click_pos: Option<(u16, u16)>) {
