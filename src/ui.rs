@@ -37,7 +37,7 @@ impl Default for Pixel {
         Self {
             char: ' ',
             color: Color::White,
-            changed: true,
+            changed: false,
         }
     }
 }
@@ -255,7 +255,25 @@ impl<'a> Block<'a> {
                 }
             }
         }
-        // println!("{:?}", self.size);
+    }
+
+    pub fn calc_parent(&mut self, parent_pos: (u16, u16)) {
+        self.pos.0 += parent_pos.0;
+        self.pos.1 += parent_pos.1;
+        println!("{:?}", self.inner_pos);
+        self.calc_self();
+
+        for el in self.contents.iter_mut() {
+            match el.get_mut() {
+                Element::Block(block) => {
+                    block.calc_parent(self.inner_pos);
+                }
+                // TODO
+                Element::Widget(_) => {
+                    // widget.process(click_pos);
+                }
+            }
+        }
     }
 
     pub fn process(&mut self, click_pos: Option<(u16, u16)>) {
@@ -290,15 +308,12 @@ impl<'a> Block<'a> {
         let mut r = RefCell::new(w);
         match r.get_mut() {
             Element::Block(ref mut block) => {
-                block.pos = (
-                    block.pos.0 + self.pos.0 + self.inner_pos.0,
-                    block.pos.1 + self.pos.1 + self.inner_pos.1,
-                );
-                block.calc_self();
-                match self.direction {
-                    Direction::Horizontal => self.inner_pos.0 += block.size.0,
-                    Direction::Vertical => self.inner_pos.1 += block.size.1,
-                }
+                block.pos = (block.pos.0 + self.pos.0, block.pos.1 + self.pos.1);
+                block.calc_parent(self.inner_pos);
+                // match self.direction {
+                //     Direction::Horizontal => self.inner_pos.0 += block.size.0,
+                //     Direction::Vertical => self.inner_pos.1 += block.size.1,
+                // }
             }
             Element::Widget(ref mut widget) => {
                 let adjusted = (

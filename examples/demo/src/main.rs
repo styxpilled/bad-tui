@@ -1,8 +1,8 @@
 use bad_tui::ui::{Block, Context, Element, Widget, UI};
 use crossterm::{
-    cursor::{self, position},
+    cursor::{self, position, MoveTo},
     event::{poll, read, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
-    execute,
+    execute, queue,
     style::Color,
     terminal::{self, disable_raw_mode, enable_raw_mode, Clear, ClearType},
 };
@@ -70,6 +70,10 @@ fn print_events(stdout: &mut Stdout) -> io::Result<()> {
     //         .margin(|mar| mar.color(Color::Blue).symbol('!')),
     // ));
     let mut b = Block::new((0, 0));
+    let mut b_third = Block::new((0, 0));
+    // b_third.
+    b_third.push(Element::Block(Block::new((0, 0))));
+    b.push(Element::Block(b_third));
     // b.push(Element::Widget(
     //     Widget::new("I'm a widget!")
     //         .padding(|pad| {
