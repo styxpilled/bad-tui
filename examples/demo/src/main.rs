@@ -23,17 +23,56 @@ fn print_events(stdout: &mut Stdout) -> io::Result<()> {
         click_pos: None,
     };
 
-    ui.root
-        .push(Element::Widget(Widget::new("I'm a widget!").padding(
-            |pad| {
+    ui.root.push(Element::Widget(
+        Widget::new("I'm a widget!")
+            .padding(|pad| {
                 pad.color(Color::Cyan)
+                    .set(bad_tui::ui::AreaShort::Uniform(1))
+            })
+            .margin(|mar| mar.color(Color::Blue).symbol('!')),
+    ));
+
+    ui.root
+        .push(Element::Widget(Widget::new("I'm a second widget!").margin(
+            |mar| {
+                mar.color(Color::Green)
                     .set(bad_tui::ui::AreaShort::Uniform(2))
+                    .symbol('@')
             },
         )));
 
     ui.root
-        .push(Element::Widget(Widget::new("I'm a second widget!")));
-
+        .push(Element::Widget(Widget::new("I'm a third widget!").margin(
+            |mar| {
+                mar.color(Color::Yellow)
+                    .set(bad_tui::ui::AreaShort::HorVer(3, 4))
+                    .symbol('#')
+            },
+        )));
+    ui.root
+        .push(Element::Widget(Widget::new("I'm a second widget!").margin(
+            |mar| {
+                mar.color(Color::Green)
+                    .set(bad_tui::ui::AreaShort::Uniform(2))
+                    .symbol('@')
+            },
+        )));
+    ui.root.push(Element::Widget(
+        Widget::new("I'm a fourth widget!")
+            .padding(|pad| {
+                pad.color(Color::Cyan)
+                    .set(bad_tui::ui::AreaShort::Uniform(1))
+            })
+            .margin(|mar| mar.color(Color::Blue).symbol('!')),
+    ));
+    ui.root.push(Element::Widget(
+        Widget::new("I'm a widget!")
+            .padding(|pad| {
+                pad.color(Color::Cyan)
+                    .set(bad_tui::ui::AreaShort::Uniform(1))
+            })
+            .margin(|mar| mar.color(Color::Blue).symbol('!')),
+    ));
     // let mut b = Block::new((0, 0));
     // b.push(Element::Widget(Widget::new("I'm a nested widget!")));
     // b.push(Element::Block(Block::new((0, 0))));

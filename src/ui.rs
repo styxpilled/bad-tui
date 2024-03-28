@@ -6,6 +6,7 @@ use crossterm::{
 };
 use std::{
     cell::{Ref, RefCell},
+    cmp,
     io::{Stdout, Write},
     rc::Rc,
 };
@@ -72,10 +73,11 @@ pub enum Element<'a> {
 ///! WIDTH, HEIGHT
 pub struct Block<'a> {
     contents: Vec<RefCell<Element<'a>>>,
-    parent: Option<Rc<Block<'a>>>,
+    // parent: Option<Rc<Block<'a>>>,
     pub pos: (u16, u16),
     pub size: (u16, u16),
     inner_pos: (u16, u16),
+    available_margin: (u16, u16),
     pub direction: Direction,
 }
 
@@ -159,10 +161,11 @@ impl<'a> Block<'a> {
 
     pub fn new(pos: (u16, u16)) -> Self {
         Self {
-            parent: None,
+            // parent: None,
             pos,
             size: (3, 3),
             inner_pos: (2, 2),
+            available_margin: (0, 0),
             contents: vec![],
             direction: Direction::Horizontal,
         }
@@ -186,14 +189,24 @@ impl<'a> Block<'a> {
                 }
             }
             Element::Widget(ref mut widget) => {
+                let adjusted = (
+                    cmp::min(self.available_margin.0, widget.margin.left),
+                    cmp::min(self.available_margin.1, widget.margin.top),
+                );
                 widget.pos = (
-                    widget.pos.0 + self.pos.0 + self.inner_pos.0,
-                    widget.pos.1 + self.pos.1 + self.inner_pos.1,
+                    widget.pos.0 + self.pos.0 + self.inner_pos.0 - adjusted.0,
+                    widget.pos.1 + self.pos.1 + self.inner_pos.1 - adjusted.1,
                 );
                 widget.calc_self();
                 match self.direction {
-                    Direction::Horizontal => self.inner_pos.0 += widget.size.0 - widget.margin.0,
-                    Direction::Vertical => self.inner_pos.1 += widget.size.1 - widget.margin.1,
+                    Direction::Horizontal => {
+                        self.inner_pos.0 += widget.size.0 - adjusted.0;
+                        self.available_margin.0 = widget.margin.left;
+                    }
+                    Direction::Vertical => {
+                        self.inner_pos.1 += widget.size.1 - adjusted.1;
+                        self.available_margin.1 = widget.margin.top;
+                    }
                 }
             }
         };
@@ -243,11 +256,11 @@ impl Area {
 impl Default for Area {
     fn default() -> Self {
         Self {
-            top: 0,
-            right: 0,
-            bottom: 0,
-            left: 0,
-            symbol: '@',
+            top: 1,
+            right: 1,
+            bottom: 1,
+            left: 1,
+            symbol: ' ',
             color: Color::White,
             background: Color::Black,
         }
@@ -259,7 +272,7 @@ pub struct Widget {
     // pub color: Color,
     // pub bg: Option<Color>,
     pub padding: Area,
-    pub margin: (u16, u16),
+    pub margin: Area,
     // Including margin & padding!
     pub size: (u16, u16),
     pub pos: (u16, u16),
@@ -276,7 +289,7 @@ impl Widget {
             clicked: false,
             padding: Area::default().symbol('$'),
             size: (3, 3),
-            margin: (1, 1),
+            margin: Area::default().symbol('#'),
         }
     }
 
@@ -285,6 +298,14 @@ impl Widget {
         F: FnOnce(Area) -> Area,
     {
         self.padding = f(self.padding);
+        self
+    }
+
+    pub fn margin<F>(mut self, f: F) -> Self
+    where
+        F: FnOnce(Area) -> Area,
+    {
+        self.margin = f(self.margin);
         self
     }
 
@@ -301,25 +322,27 @@ impl Widget {
             queue!(
                 stdout,
                 cursor::MoveTo(self.pos.0, row),
-                Print("@".repeat(
-                    (self.margin.0
-                        + self.margin.0
-                        + self.text.len() as u16
+                SetForegroundColor(self.margin.color),
+                // TODO: make symbol a string and only accept char to set symbol?
+                Print(self.margin.symbol.to_string().repeat(
+                    (self.margin.left
+                        + self.margin.right
                         + self.padding.left
-                        + self.padding.right) as usize
+                        + self.padding.right
+                        + self.text.len() as u16) as usize
                 ))
             )
             .unwrap();
             row += 1;
         }
         // padding
-        let mut row = self.pos.1 + self.margin.1;
-        while row < self.pos.1 + self.size.1 - self.margin.1 {
+        let mut row = self.pos.1 + self.margin.top;
+        while row < self.pos.1 + self.size.1 - self.margin.top {
             queue!(
                 stdout,
-                cursor::MoveTo(self.pos.0 + self.margin.0, row),
+                cursor::MoveTo(self.pos.0 + self.margin.left, row),
                 SetForegroundColor(self.padding.color),
-                Print("$".repeat(
+                Print(self.padding.symbol.to_string().repeat(
                     (self.padding.left + self.padding.right + self.text.len() as u16) as usize
                 ))
             )
@@ -332,8 +355,8 @@ impl Widget {
             FG_RESET,
             BG_RESET,
             cursor::MoveTo(
-                self.pos.0 + self.margin.0 + self.padding.left,
-                self.pos.1 + self.margin.1 + self.padding.top
+                self.pos.0 + self.margin.left + self.padding.left,
+                self.pos.1 + self.margin.top + self.padding.top
             ),
             // Print(" ".repeat(self.margin.0.into())),
             SetBackgroundColor(Color::White),
@@ -356,17 +379,21 @@ impl Widget {
 
     pub fn calc_self(&mut self) -> (u16, u16) {
         // only supports 1-height text for now
-        self.size.0 = self.margin.0 * 2 + self.padding.left * 2 + self.text.len() as u16;
-        self.size.1 = self.margin.1 * 2 + self.padding.top * 2 + 1;
+        self.size.0 = self.margin.left
+            + self.margin.right
+            + self.padding.left
+            + self.padding.right
+            + self.text.len() as u16;
+        self.size.1 = self.margin.top * 2 + self.padding.top * 2 + 1;
         self.size
     }
 
     pub fn process(&mut self, click_pos: Option<(u16, u16)>) {
         if let Some((click_col, click_row)) = click_pos {
-            if click_col >= self.pos.0 + self.margin.0
-                && click_row >= self.pos.1 + self.margin.1
-                && click_col < self.pos.0 + self.size.0 - self.margin.0
-                && click_row < self.pos.1 + self.size.1 - self.margin.1
+            if click_col >= self.pos.0 + self.margin.left
+                && click_row >= self.pos.1 + self.margin.top
+                && click_col < self.pos.0 + self.size.0 - self.margin.right
+                && click_row < self.pos.1 + self.size.1 - self.margin.bottom
             {
                 self.clicked = true;
             };
